@@ -41,10 +41,11 @@ Wire up the backends properly.
 
 - [ ] **ds4-server tested end-to-end** — full agent loop with DeepSeek V4 Flash on Apple Silicon
 - [ ] **MCP memory integration** — agent reads/writes the knowledge graph via mcp-server-memory
-- [ ] **MCP unified-history integration** — agent searches session history, transcripts, notifications
+- [ ] **MCP unified-history integration** — agent searches session history, transcripts, notifications (backed by vibe-fst-indexer)
 - [ ] **Hash-chained evidence manifest** — each manifest entry includes SHA-256 of previous entry for tamper detection
 - [ ] **Graph-gardener integration** — periodic deduplication and cleanup of the investigation graph
 - [ ] **Vibe-summarizer integration** — condense long tool results and conversation turns
+- [ ] **Vibe-fst-indexer integration** — fast FST-backed search indexes for large history corpora
 
 ## Phase 4 — Methodology Depth
 

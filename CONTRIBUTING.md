@@ -16,7 +16,7 @@ These are the constraints that shape every decision. PRs that violate them won't
 ## Development Setup
 
 ```bash
-git clone https://github.com/jmars/palimpsest
+git clone https://github.com/palimpsest-labs/palimpsest
 cd palimpsest
 python -m venv .venv
 source .venv/bin/activate

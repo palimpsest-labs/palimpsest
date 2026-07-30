@@ -14,7 +14,7 @@ A standalone agent that works with `ds4` (DwarfStar — [antirez/ds4](https://gi
 
 ```bash
 # Install
-pip install git+https://github.com/jmars/palimpsest
+pip install git+https://github.com/palimpsest-labs/palimpsest
 
 # Create a case
 palimpsest new my-investigation --title "My Investigation"
@@ -31,6 +31,9 @@ palimpsest agent my-investigation --message "Investigate..."
 | `BigMoeOnEdge` | Phone companion — runs MoE models on-device for field work |
 | `mcp-server-memory` | Knowledge graph persistence (one per case) |
 | `unified-history-mcp` | Full-text search across sessions, transcripts, notifications |
+| `vibe-fst-indexer` | Blazing-fast FST search indexing (Rust) |
+| `vibe-summarizer` | LLM-powered session and transcript condensation |
+| `graph-gardener` | Knowledge graph maintenance — deduplication, enrichment, cleanup |
 
 ## Investigation Workflow
 

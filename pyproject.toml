@@ -35,9 +35,9 @@ dev = [
 palimpsest = "palimpsest.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/jmars/palimpsest"
-Repository = "https://github.com/jmars/palimpsest"
-Issues = "https://github.com/jmars/palimpsest/issues"
+Homepage = "https://github.com/palimpsest-labs/palimpsest"
+Repository = "https://github.com/palimpsest-labs/palimpsest"
+Issues = "https://github.com/palimpsest-labs/palimpsest/issues"
 
 [tool.hatch.version]
 path = "src/palimpsest/__init__.py"
