@@ -31,7 +31,7 @@ palimpsest agent my-investigation --message "Investigate..."
 | `BigMoeOnEdge` | Phone companion — runs MoE models on-device for field work |
 | `mcp-server-memory` | Knowledge graph persistence (one per case) |
 | [`unified-history-mcp`](https://github.com/palimpsest-labs/unified-history-mcp) | Full-text search across sessions, transcripts, notifications |
-| [`vibe-fst-indexer`](https://github.com/palimpsest-labs/vibe-fst-indexer) | Blazing-fast FST search indexing (Rust) |
+| [`fst-indexer`](https://github.com/palimpsest-labs/vibe-fst-indexer) | Blazing-fast FST search indexing (Rust) |
 | [`summarizer`](https://github.com/palimpsest-labs/vibe-summarizer) | LLM-powered session and transcript condensation |
 | [`graph-gardener`](https://github.com/palimpsest-labs/graph-gardener) | Knowledge graph maintenance — deduplication, enrichment, cleanup |
 

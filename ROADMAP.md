@@ -45,7 +45,7 @@ Wire up the backends properly.
 - [ ] **Hash-chained evidence manifest** — each manifest entry includes SHA-256 of previous entry for tamper detection
 - [ ] **Graph-gardener integration** — periodic deduplication and cleanup of the investigation graph
 - [ ] **Summarizer integration** — condense long tool results and conversation turns
-- [ ] **Vibe-fst-indexer integration** — fast FST-backed search indexes for large history corpora
+- [ ] **FST indexer integration** — fast FST-backed search indexes for large history corpora
 
 ## Phase 4 — Methodology Depth
 
