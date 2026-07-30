@@ -44,7 +44,7 @@ Wire up the backends properly.
 - [ ] **MCP unified-history integration** — agent searches session history, transcripts, notifications (backed by vibe-fst-indexer)
 - [ ] **Hash-chained evidence manifest** — each manifest entry includes SHA-256 of previous entry for tamper detection
 - [ ] **Graph-gardener integration** — periodic deduplication and cleanup of the investigation graph
-- [ ] **Vibe-summarizer integration** — condense long tool results and conversation turns
+- [ ] **Summarizer integration** — condense long tool results and conversation turns
 - [ ] **Vibe-fst-indexer integration** — fast FST-backed search indexes for large history corpora
 
 ## Phase 4 — Methodology Depth

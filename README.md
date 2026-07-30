@@ -32,7 +32,7 @@ palimpsest agent my-investigation --message "Investigate..."
 | `mcp-server-memory` | Knowledge graph persistence (one per case) |
 | [`unified-history-mcp`](https://github.com/palimpsest-labs/unified-history-mcp) | Full-text search across sessions, transcripts, notifications |
 | [`vibe-fst-indexer`](https://github.com/palimpsest-labs/vibe-fst-indexer) | Blazing-fast FST search indexing (Rust) |
-| [`vibe-summarizer`](https://github.com/palimpsest-labs/vibe-summarizer) | LLM-powered session and transcript condensation |
+| [`summarizer`](https://github.com/palimpsest-labs/vibe-summarizer) | LLM-powered session and transcript condensation |
 | [`graph-gardener`](https://github.com/palimpsest-labs/graph-gardener) | Knowledge graph maintenance — deduplication, enrichment, cleanup |
 
 ## Investigation Workflow
