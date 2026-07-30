@@ -10,6 +10,36 @@ Journalists piece together stories from fragments — a GitHub profile here, a C
 
 A standalone agent that works with `ds4` (DwarfStar — [antirez/ds4](https://github.com/antirez/ds4)) for local LLM inference and [BigMoeOnEdge](https://github.com/Helldez/BigMoeOnEdge) as a phone companion for field work.
 
+## The Toolkit
+
+Seven repos, one integrated pipeline:
+
+| Repo | Role |
+|---|---|
+| **[palimpsest](https://github.com/palimpsest-labs/palimpsest)** | Research engine — local-first, source-tracked, methodology-enforced |
+| **[unified-history-mcp](https://github.com/palimpsest-labs/unified-history-mcp)** | Cross-domain search across sessions, transcripts, notifications, and web archives |
+| **[fst-indexer](https://github.com/palimpsest-labs/fst-indexer)** | Blazing-fast FST full-text search indexer (Rust) |
+| **[graph-gardener](https://github.com/palimpsest-labs/graph-gardener)** | LLM-powered knowledge graph maintenance |
+| **[web-archive-mcp](https://github.com/palimpsest-labs/web-archive-mcp)** | Persistent web fetch/search archiving — every result indexed forever |
+| **[shell-sandbox-mcp](https://github.com/palimpsest-labs/shell-sandbox-mcp)** | Safe shell commands via pledge()+unveil() with vendored busybox |
+| **[vibe-summarizer](https://github.com/palimpsest-labs/vibe-summarizer)** | LLM-powered session and transcript summarizer |
+
+### How they connect
+
+```
+shell-sandbox-mcp ──► pledge()+unveil() ──► busybox applets
+web-archive-mcp   ──► web_fetch/search   ──► JSONL archive
+                          │                      │
+                          ▼                      ▼
+                    fst-indexer ◄──────── unified-history-mcp
+                          │                      │
+                          ▼                      ▼
+                    graph-gardener          search across all
+                          │                 domains at once
+                          ▼
+                    memory graph
+```
+
 ## Quick Start
 
 ```bash
@@ -22,18 +52,6 @@ palimpsest new my-investigation --title "My Investigation"
 # Run the agent (requires ds4-server running on localhost:8000)
 palimpsest agent my-investigation --message "Investigate..."
 ```
-
-## The Toolkit
-
-| Component | Role |
-|---|---|
-| `ds4` (DwarfStar) | Local LLM inference engine for DeepSeek V4 Flash on Apple Silicon |
-| `BigMoeOnEdge` | Phone companion — runs MoE models on-device for field work |
-| `mcp-server-memory` | Knowledge graph persistence (one per case) |
-| [`unified-history-mcp`](https://github.com/palimpsest-labs/unified-history-mcp) | Full-text search across sessions, transcripts, notifications |
-| [`fst-indexer`](https://github.com/palimpsest-labs/fst-indexer) | Blazing-fast FST search indexing (Rust) |
-| [`summarizer`](https://github.com/palimpsest-labs/summarizer) | LLM-powered session and transcript condensation |
-| [`graph-gardener`](https://github.com/palimpsest-labs/graph-gardener) | Knowledge graph maintenance — deduplication, enrichment, cleanup |
 
 ## Investigation Workflow
 
