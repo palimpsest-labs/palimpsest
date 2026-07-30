@@ -1,6 +1,8 @@
 # Palimpsest
 
-**Open-source research engine for investigative journalists.**
+> *Ghost in the pages.*
+
+**Open-source intelligence fusion tool for investigative journalists.**
 
 Named for the medieval manuscript page scraped clean for reuse, where traces of the original text remain visible beneath the surface. Palimpsest uncovers what was written over.
 
