@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palimpsest</title>
+<style>
+:root {
+  --bg: #0f0f14;
+  --surface: #18181f;
+  --surface2: #22222b;
+  --border: #2a2a35;
+  --text: #d4d4d8;
+  --muted: #7c7c8a;
+  --accent: #a78bfa;
+  --accent2: #7c3aed;
+  --green: #34d399;
+  --red: #f87171;
+  --yellow: #fbbf24;
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Top bar */
+#topbar {
+  display:flex; align-items:center; gap:12px;
+  padding:10px 16px; background:var(--surface);
+  border-bottom:1px solid var(--border); min-height:52px;
+  flex-shrink:0;
+}
+#topbar .logo{font-weight:700;font-size:16px;color:var(--accent);white-space:nowrap}
+#topbar .sep{color:var(--muted)}
+#topbar .phase-badge{
+  padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600;
+  background:var(--surface2); color:var(--muted);
+}
+.phase-badge.scope{color:var(--accent)}
+.phase-badge.map{color:#60a5fa}
+.phase-badge.enumerate{color:var(--yellow)}
+.phase-badge.corroborate{color:var(--green)}
+.phase-badge.synthesize{color:#c084fc}
+.phase-badge.gap_analysis{color:#fb923c}
+.phase-badge.report{color:var(--red)}
+#topbar .progress-bar{
+  flex:1; height:4px; background:var(--surface2); border-radius:2px; overflow:hidden;
+}
+#topbar .progress-bar .fill{
+  height:100%; background:var(--accent); border-radius:2px; transition:width .4s;
+}
+
+/* Main layout */
+#main{display:flex;flex:1;overflow:hidden}
+#chat-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#sidebar{
+  width:360px; border-left:1px solid var(--border); background:var(--surface);
+  display:flex; flex-direction:column; flex-shrink:0; overflow:hidden;
+}
+
+/* Messages */
+#messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:85%;padding:10px 14px;border-radius:var(--radius);line-height:1.6;font-size:14px}
+.msg.user{align-self:flex-end;background:var(--accent2);color:#fff}
+.msg.assistant{align-self:flex-start;background:var(--surface2)}
+.msg.assistant p{margin:4px 0}
+.msg.assistant pre{background:var(--bg);padding:10px;border-radius:6px;overflow-x:auto;font-family:var(--mono);font-size:13px;margin:8px 0}
+.msg.assistant code{font-family:var(--mono);font-size:13px;background:var(--bg);padding:1px 4px;border-radius:3px}
+.msg.assistant pre code{background:none;padding:0}
+.msg.assistant table{width:100%;border-collapse:collapse;margin:8px 0}
+.msg.assistant th,.msg.assistant td{border:1px solid var(--border);padding:6px 10px;text-align:left;font-size:13px}
+.tool-note{align-self:flex-start;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.tool-note .icon{font-size:14px}
+.tool-note.error{color:var(--red)}
+.tool-note summary{cursor:pointer;display:inline}
+
+/* Input */
+#input-area{display:flex;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface);gap:8px}
+#input-area textarea{
+  flex:1; resize:none; background:var(--bg); color:var(--text);
+  border:1px solid var(--border); border-radius:var(--radius);
+  padding:10px; font-family:var(--font); font-size:14px;
+  min-height:44px; max-height:120px; outline:none;
+}
+#input-area textarea:focus{border-color:var(--accent)}
+#input-area button{
+  background:var(--accent2); color:#fff; border:none; border-radius:var(--radius);
+  padding:0 18px; cursor:pointer; font-weight:600; font-size:14px;
+}
+#input-area button:disabled{opacity:.5;cursor:not-allowed}
+
+/* Sidebar */
+#sidebar-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+#sidebar-tabs button{
+  flex:1; padding:10px; border:none; background:none; color:var(--muted);
+  font-size:13px; cursor:pointer; border-bottom:2px solid transparent;
+}
+#sidebar-tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+#sidebar-content{flex:1;overflow-y:auto;padding:12px;font-size:13px}
+#sidebar-content pre{background:var(--bg);padding:10px;border-radius:6px;overflow-x:auto;font-size:12px}
+.evidence-card{
+  background:var(--surface2); border-radius:var(--radius); padding:10px; margin-bottom:8px;
+}
+.evidence-card .url{font-weight:600;color:var(--accent);word-break:break-all;font-size:12px}
+.evidence-card .meta{color:var(--muted);font-size:11px;margin-top:4px}
+.evidence-card .sha{font-family:var(--mono);font-size:11px;word-break:break-all}
+
+/* Landing / case list */
+#landing{display:none;padding:40px;max-width:680px;margin:0 auto;width:100%}
+#landing.show{display:block}
+#landing h1{font-size:28px;margin-bottom:8px}
+#landing .subtitle{color:var(--muted);margin-bottom:32px}
+.case-card{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; margin-bottom:10px; cursor:pointer; transition:border-color .2s;
+}
+.case-card:hover{border-color:var(--accent)}
+.case-card .title{font-size:16px;font-weight:600}
+.case-card .meta{color:var(--muted);font-size:12px;margin-top:4px;display:flex;gap:16px}
+
+/* Loading / empty */
+.loading{text-align:center;padding:40px;color:var(--muted)}
+.empty{text-align:center;padding:40px;color:var(--muted);font-style:italic}
+.streaming-cursor{display:inline-block;width:8px;height:16px;background:var(--accent);animation:blink .8s infinite;vertical-align:text-bottom}
+@keyframes blink{50%{opacity:0}}
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header id="topbar" style="display:none">
+  <a href="#" class="logo" onclick="routeTo('')">Palimpsest</a>
+  <span class="sep">/</span>
+  <span id="case-title">…</span>
+  <span id="phase-badge" class="phase-badge">scope</span>
+  <div class="progress-bar"><div class="fill" id="phase-progress"></div></div>
+</header>
+
+<!-- Landing page -->
+<div id="landing" class="show">
+  <h1>Palimpsest</h1>
+  <p class="subtitle">Open-source research engine for investigative journalists.</p>
+  <div id="case-list"><div class="loading">Loading cases…</div></div>
+</div>
+
+<!-- Main investigation view -->
+<div id="main" style="display:none">
+  <div id="chat-panel">
+    <div id="messages"></div>
+    <div id="input-area">
+      <textarea id="chat-input" rows="1" placeholder="What should I investigate?"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+      <button id="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+  <aside id="sidebar">
+    <div id="sidebar-tabs">
+      <button class="active" onclick="switchTab('evidence')">Evidence</button>
+      <button onclick="switchTab('graph')">Graph</button>
+      <button onclick="switchTab('dossier')">Dossier</button>
+    </div>
+    <div id="sidebar-content"></div>
+  </aside>
+</div>
+
+<script src="/vendor/marked.min.js"></script>
+<script src="/vendor/mermaid.min.js"></script>
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let currentSlug = null;
+let streaming = false;
+let bubbleContent = '';  // module-scoped for handleSSE access
+
+const PHASES = ['scope','map','enumerate','corroborate','synthesize','gap_analysis','report'];
+
+// ---------------------------------------------------------------------------
+// Routing
+// ---------------------------------------------------------------------------
+function routeTo(slug) {
+  window.location.hash = slug ? '#' + slug : '';
+}
+
+window.addEventListener('hashchange', () => {
+  const slug = window.location.hash.slice(1);
+  if (slug !== currentSlug) loadView(slug);
+});
+
+function loadView(slug) {
+  currentSlug = slug;
+  if (!slug) {
+    document.getElementById('landing').classList.add('show');
+    document.getElementById('main').style.display = 'none';
+    document.getElementById('topbar').style.display = 'none';
+    loadCaseList();
+  } else {
+    document.getElementById('landing').classList.remove('show');
+    document.getElementById('main').style.display = 'flex';
+    document.getElementById('topbar').style.display = 'flex';
+    document.getElementById('messages').innerHTML = '';
+    loadCase(slug);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Case list (landing page)
+// ---------------------------------------------------------------------------
+async function loadCaseList() {
+  const el = document.getElementById('case-list');
+  try {
+    const cases = await fetch('/api/cases').then(r => r.json());
+    if (!cases.length) {
+      el.innerHTML = '<div class="empty">No cases yet.<br><br>Create one: <code>palimpsest new my-investigation --title "My Investigation"</code></div>';
+      return;
+    }
+    el.innerHTML = cases.map(c => `
+      <div class="case-card" onclick="routeTo('${c.slug}')">
+        <div class="title">${esc(c.title || c.slug)}</div>
+        <div class="meta">
+          <span class="phase-badge ${c.phase}">${c.phase}</span>
+          <span>${c.open_leads_count} open leads</span>
+          <span>${c.updated ? fmtDate(c.updated) : ''}</span>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Case view
+// ---------------------------------------------------------------------------
+async function loadCase(slug) {
+  try {
+    const [state, history, evidence] = await Promise.all([
+      fetch(`/api/cases/${slug}/state`).then(r => r.json()),
+      fetch(`/api/cases/${slug}/history`).then(r => r.json()),
+      fetch(`/api/cases/${slug}/evidence`).then(r => r.json()),
+    ]);
+    renderState(state);
+    renderHistory(history);
+    renderEvidence(evidence);
+    // Default tab content
+    document.querySelector('#sidebar-tabs button').click();
+  } catch(e) {
+    document.getElementById('messages').innerHTML =
+      `<div class="empty">Error loading case: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderState(state) {
+  document.getElementById('case-title').textContent = state.title || state.slug;
+  const badge = document.getElementById('phase-badge');
+  badge.textContent = state.phase;
+  badge.className = 'phase-badge ' + state.phase;
+  const idx = PHASES.indexOf(state.phase);
+  const pct = idx >= 0 ? Math.round(((idx + 1) / PHASES.length) * 100) : 0;
+  document.getElementById('phase-progress').style.width = pct + '%';
+}
+
+function renderHistory(history) {
+  const el = document.getElementById('messages');
+  el.innerHTML = '';
+  for (const msg of history) {
+    if (msg.role === 'user') {
+      el.appendChild(userMsg(msg.content));
+    } else if (msg.role === 'assistant') {
+      el.appendChild(assistantMsg(marked.parse(msg.content || '')));
+      if (msg.tool_calls) {
+        for (const tc of msg.tool_calls) {
+          el.appendChild(toolCallNote(tc.name, tc.args));
+        }
+      }
+    } else if (msg.role === 'tool') {
+      el.appendChild(toolResultNote(
+        msg.tool_call_id, '',
+        msg.content || '', false
+      ));
+    }
+  }
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+async function sendMessage() {
+  if (streaming) return;
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  streaming = true;
+  document.getElementById('send-btn').disabled = true;
+
+  const msgs = document.getElementById('messages');
+  msgs.appendChild(userMsg(text));
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Streaming assistant bubble
+  const bubble = assistantMsg('');
+  msgs.appendChild(bubble);
+  bubbleContent = '';
+  let pendingToolCalls = new Map();
+
+  try {
+    const resp = await fetch(`/api/cases/${currentSlug}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: text}),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+
+      // Parse SSE frames
+      while (buffer.includes('\n')) {
+        const idx = buffer.indexOf('\n');
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7);
+        } else if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            handleSSE(data, bubble, msgs, pendingToolCalls);
+          } catch(e) {}
+          currentEvent = '';
+        }
+      }
+    }
+  } catch(e) {
+    bubble.innerHTML = marked.parse('**Error:** ' + esc(e.message));
+  }
+
+  // Remove streaming cursor
+  const cursor = bubble.querySelector('.streaming-cursor');
+  if (cursor) cursor.remove();
+
+  streaming = false;
+  document.getElementById('send-btn').disabled = false;
+
+  // Refresh state and evidence after turn completes
+  if (currentSlug) {
+    try {
+      const state = await fetch(`/api/cases/${currentSlug}/state`).then(r => r.json());
+      renderState(state);
+      const evidence = await fetch(`/api/cases/${currentSlug}/evidence`).then(r => r.json());
+      renderEvidence(evidence);
+    } catch(e) {}
+  }
+}
+
+function handleSSE(data, bubble, msgs, pendingToolCalls) {
+  switch(data.type) {
+    case 'text_delta':
+      // Append to the streaming bubble
+      bubbleContent += data.content;
+      bubble.innerHTML = marked.parse(bubbleContent) +
+        '<span class="streaming-cursor"></span>';
+      msgs.scrollTop = msgs.scrollHeight;
+      break;
+    case 'tool_call':
+      pendingToolCalls.set(data.call_id, {name: data.name, args: data.args});
+      msgs.appendChild(toolCallNote(data.name, data.args));
+      msgs.scrollTop = msgs.scrollHeight;
+      break;
+    case 'tool_result':
+      const tc = pendingToolCalls.get(data.call_id);
+      msgs.appendChild(toolResultNote(
+        data.call_id, tc ? tc.name : data.name,
+        data.content, data.is_error
+      ));
+      pendingToolCalls.delete(data.call_id);
+      msgs.scrollTop = msgs.scrollHeight;
+      break;
+    case 'turn_complete':
+      // Final text already rendered via text_delta
+      break;
+    case 'error':
+      bubble.innerHTML = marked.parse('**Error:** ' + esc(data.message));
+      break;
+    case 'done':
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+function switchTab(tab) {
+  document.querySelectorAll('#sidebar-tabs button').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim().toLowerCase() === tab);
+  });
+  if (tab === 'evidence') renderEvidenceTab();
+  else if (tab === 'graph') renderGraphTab();
+  else if (tab === 'dossier') renderDossierTab();
+}
+
+let cachedEvidence = [];
+function renderEvidence(entries) { cachedEvidence = entries || []; }
+
+function renderEvidenceTab() {
+  const el = document.getElementById('sidebar-content');
+  if (!cachedEvidence.length) {
+    el.innerHTML = '<div class="empty">No evidence captured yet.</div>';
+    return;
+  }
+  el.innerHTML = cachedEvidence.map(e => `
+    <div class="evidence-card">
+      <div class="url">${esc(e.url)}</div>
+      <div class="meta">
+        Status: ${e.status_code} &middot;
+        ${e.timestamp ? fmtDate(e.timestamp) : ''}
+        ${e.wayback_url ? ` &middot; <a href="${esc(e.wayback_url)}" target="_blank" rel="noopener">Wayback</a>` : ''}
+      </div>
+      <div class="sha">SHA-256: ${esc(e.sha256)}</div>
+    </div>
+  `).join('');
+}
+
+function renderGraphTab() {
+  const el = document.getElementById('sidebar-content');
+  // Build Mermaid graph from state data if available, else show placeholder
+  el.innerHTML = `
+    <div class="empty">
+      <p>Entity graph preview — available when the MCP memory integration is active (Phase 3).</p>
+      <p style="margin-top:8px;font-size:12px">Entities and relations will be rendered here as the investigation builds the knowledge graph.</p>
+    </div>`;
+}
+
+async function renderDossierTab() {
+  const el = document.getElementById('sidebar-content');
+  el.innerHTML = '<div class="loading">Loading dossier…</div>';
+  try {
+    const resp = await fetch(`/api/cases/${currentSlug}/dossier`);
+    const md = await resp.text();
+    el.innerHTML = marked.parse(md);
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DOM helpers
+// ---------------------------------------------------------------------------
+function userMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.textContent = text;
+  return div;
+}
+
+function assistantMsg(html) {
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.innerHTML = html;
+  return div;
+}
+
+function toolCallNote(name, args) {
+  const div = document.createElement('div');
+  div.className = 'tool-note';
+  const argsStr = typeof args === 'string' ? args : JSON.stringify(args);
+  div.innerHTML = `<span class="icon">🔧</span> <strong>${esc(name)}</strong> <span style="color:var(--muted);font-family:var(--mono);font-size:11px">${esc(argsStr.slice(0, 120))}</span>`;
+  return div;
+}
+
+function toolResultNote(callId, name, content, isError) {
+  const div = document.createElement('div');
+  div.className = 'tool-note' + (isError ? ' error' : '');
+  const preview = (content || '').slice(0, 200).replace(/\n/g, ' ');
+  div.innerHTML = `<span class="icon">${isError ? '⚠️' : '✓'}</span> ${isError ? esc(preview) : esc(preview)}`;
+  return div;
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleDateString(); } catch(e) { return iso.slice(0,10); }
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+mermaid.initialize({startOnLoad:false,theme:'dark',securityLevel:'loose'});
+marked.setOptions({breaks:true,gfm:true,sanitize:true});
+loadView(window.location.hash.slice(1));
+</script>
+</body>
+</html>

@@ -39,6 +39,8 @@ def main() -> None:
         _cmd_research("rdap", sys.argv[2:])
     elif cmd == "capture":
         _cmd_capture(sys.argv[2:])
+    elif cmd == "serve":
+        _cmd_serve(sys.argv[2:])
     else:
         print(f"Unknown command: {cmd}")
         _usage()
@@ -60,6 +62,7 @@ Usage:
   palimpsest whois <domain>
   palimpsest rdap <domain>
   palimpsest capture <url> --case <slug>
+  palimpsest serve [--port PORT] [--no-browser]
 
 Environment:
   PALIMPSEST_LLM_URL     LLM endpoint (default: http://127.0.0.1:8000/v1)
@@ -230,6 +233,31 @@ def _cmd_capture(args: list[str]) -> None:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def _cmd_serve(args: list[str]) -> None:
+    port = None
+    no_browser = False
+    i = 0
+    while i < len(args):
+        if args[i] in ("-p", "--port") and i + 1 < len(args):
+            try:
+                port = int(args[i + 1])
+            except ValueError:
+                print(f"Invalid port: {args[i + 1]}")
+                sys.exit(1)
+            i += 2
+        elif args[i] == "--no-browser":
+            no_browser = True
+            i += 1
+        else:
+            i += 1
+
+    from .server import serve, DEFAULT_PORT
+    kwargs = {"no_browser": no_browser}
+    if port is not None:
+        kwargs["port"] = port
+    serve(**kwargs)
 
 
 if __name__ == "__main__":

@@ -25,14 +25,14 @@ The name: a **palimpsest** is a manuscript page from which text has been scraped
 
 The agent works. Now make it usable by actual journalists.
 
-- [ ] **REPL** — readline conversation loop with the agent. State display (phase, open leads count). `/phase`, `/leads`, `/hypothesis`, `/save`, `/quit` commands. Session persistence across restarts.
-- [ ] **Web interface** — `palimpsest serve` starts a local server, opens a browser tab. Single-page chat UI with:
-  - [ ] Chat panel (SSE streaming, markdown rendering)
-  - [ ] Phase indicator + progress bar
-  - [ ] Evidence sidebar (captured sources with SHA-256 + wayback links)
-  - [ ] Entity graph preview (Mermaid rendering)
-  - [ ] Dossier preview panel
-  - [ ] Zero build step — vanilla HTML/CSS/JS, served by the Python process
+- [x] **REPL** — readline conversation loop with the agent. State display (phase, open leads count). `/phase`, `/leads`, `/hypothesis`, `/save`, `/quit` commands. Session persistence across restarts.
+- [x] **Web interface** — `palimpsest serve` starts a local server, opens a browser tab. Single-page chat UI with:
+  - [x] Chat panel (SSE streaming, markdown rendering)
+  - [x] Phase indicator + progress bar
+  - [x] Evidence sidebar (captured sources with SHA-256 + wayback links)
+  - [x] Entity graph preview (placeholder for Phase 3 MCP integration)
+  - [x] Dossier preview panel
+  - [x] Zero build step — vanilla HTML/CSS/JS, served by the Python process
 - [ ] **Mobile companion** — case directory sync (Syncthing/git) + BigMoeOnEdge integration guide + mobile-optimized dossier template
 
 ## Phase 3 — Integration

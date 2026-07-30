@@ -6,17 +6,19 @@ and orchestrates the investigation through tool calling and methodology gates.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import sys
 import urllib.request
 import urllib.error
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+from urllib.parse import urlparse
 
-from .case import get_case_dir, get_memory_path
-from .gates import build_system_prompt, check_dossier_ready
+from .case import get_case_dir
+from .gates import build_system_prompt
 from .state import load_state, save_state
 from .tools import (
     get_all_tool_definitions,
@@ -25,6 +27,47 @@ from .tools import (
     MEMORY_TOOLS,
     RESEARCH_TOOLS,
 )
+
+
+# ------------------------------------------------------------------
+# Turn events — decouple agent output from presentation layer
+# ------------------------------------------------------------------
+
+@dataclass
+class TextEvent:
+    """Assistant text content, possibly mid-stream."""
+    content: str
+    is_streaming: bool = False  # True for partial deltas, False for complete
+
+
+@dataclass
+class ToolCallEvent:
+    """A tool invocation has started."""
+    name: str
+    args: dict
+    call_id: str
+
+
+@dataclass
+class ToolResultEvent:
+    """A tool call returned a result."""
+    call_id: str
+    name: str
+    content: str
+    is_error: bool = False
+
+
+@dataclass
+class TurnCompleteEvent:
+    """The turn finished, with optional final text."""
+    final_text: str = ""
+
+
+# Union type for any event the agent can emit
+AgentEvent = TextEvent | ToolCallEvent | ToolResultEvent | TurnCompleteEvent
+
+# Callback signature: async or sync, receives an AgentEvent
+EventCallback = Callable[[AgentEvent], Any]
 
 
 # Default LLM endpoint — configurable via env
@@ -59,7 +102,7 @@ class Agent:
         """One-shot: run one user message through the agent and exit."""
         self._print_status()
         if user_message:
-            await self._run_turn(user_message)
+            await self._run_turn(user_message, on_event=_cli_print_event)
         self._save()
 
     async def repl(self) -> None:
@@ -88,16 +131,21 @@ class Agent:
 
             # Run the turn
             try:
-                await self._run_turn(user_input)
+                await self._run_turn(user_input, on_event=_cli_print_event)
             except RuntimeError as e:
                 print(f"\n⚠️  Error: {e}")
             except KeyboardInterrupt:
                 print("\n⏸️  Interrupted. Saving state...")
                 self._save()
 
-    async def run_turn_only(self, user_message: str) -> str:
-        """Run one turn, return the model's final text response. Used by web UI."""
-        await self._run_turn(user_message)
+    async def run_turn(self, user_message: str,
+                       on_event: EventCallback | None = None) -> str:
+        """Run one turn, return the model's final text response.
+
+        If *on_event* is provided, it receives streaming text and tool
+        notifications during the turn.  Used by the web UI for SSE streaming.
+        """
+        await self._run_turn(user_message, on_event=on_event)
         # Return the last assistant content
         for msg in reversed(self.messages):
             if msg.get("role") == "assistant" and msg.get("content"):
@@ -108,8 +156,16 @@ class Agent:
     # Inner turn execution
     # ------------------------------------------------------------------
 
-    async def _run_turn(self, user_message: str) -> None:
-        """Run one user turn through the agent loop."""
+    async def _run_turn(self, user_message: str,
+                        on_event: EventCallback | None = None) -> None:
+        """Run one user turn through the agent loop.
+
+        If *on_event* is provided, it receives :class:`AgentEvent` instances
+        for every observable event during the turn — text content, tool
+        invocations, and tool results.  When *on_event* is ``None`` the turn
+        runs silently (suitable for one-shot queries where only the final
+        text matters).
+        """
         self.messages.append({"role": "user", "content": user_message})
         tools = get_all_tool_definitions()
 
@@ -118,11 +174,19 @@ class Agent:
         while turn < max_turns:
             turn += 1
 
-            response = self._call_llm(self.messages, tools)
-            choice = response.get("choices", [{}])[0]
-            message = choice.get("message", {})
-            content = message.get("content", "")
-            tool_calls = message.get("tool_calls", [])
+            if on_event is not None:
+                # Streaming path — emits text deltas to the callback
+                _used_streaming = True
+                content, tool_calls = self._call_llm_stream(
+                    self.messages, tools, on_event, turn_number=turn)
+            else:
+                # Non-streaming path (one-shot, no UI)
+                _used_streaming = False
+                response = self._call_llm(self.messages, tools)
+                choice = response.get("choices", [{}])[0]
+                message = choice.get("message", {})
+                content = message.get("content", "")
+                tool_calls = message.get("tool_calls", [])
 
             # Record assistant message
             assistant_msg: dict[str, Any] = {"role": "assistant"}
@@ -132,13 +196,15 @@ class Agent:
                 assistant_msg["tool_calls"] = tool_calls
             self.messages.append(assistant_msg)
 
-            # Display content
-            if content:
-                print(f"\n{content}")
+            # Emit text content (only for non-streaming — streaming already sent deltas)
+            if content and on_event and not _used_streaming:
+                on_event(TextEvent(content))
 
             # No tool calls? Done.
             if not tool_calls:
                 self._save()
+                if on_event:
+                    on_event(TurnCompleteEvent(final_text=content or ""))
                 return
 
             # Execute tool calls
@@ -146,25 +212,29 @@ class Agent:
                 func = tc.get("function", {})
                 name = func.get("name", "")
                 args_str = func.get("arguments", "{}")
+                call_id = tc.get("id", f"call_{turn}")
                 try:
                     args = json.loads(args_str) if isinstance(args_str, str) else args_str
                 except json.JSONDecodeError:
                     args = {}
 
-                print(f"\n  🔧 {name}({json.dumps(args, default=str)[:120]})")
+                if on_event:
+                    on_event(ToolCallEvent(name=name, args=args, call_id=call_id))
 
                 result = await self._dispatch_tool(name, args)
                 self.messages.append({
                     "role": "tool",
-                    "tool_call_id": tc.get("id", f"call_{turn}"),
+                    "tool_call_id": call_id,
                     "content": result.content[:8000],
                 })
 
-                if result.is_error:
-                    print(f"    ⚠️  {result.content[:200]}")
-                else:
-                    preview = result.content[:150].replace("\n", " ")
-                    print(f"    ✓ {preview}...")
+                if on_event:
+                    on_event(ToolResultEvent(
+                        call_id=call_id,
+                        name=name,
+                        content=result.content[:200],
+                        is_error=result.is_error,
+                    ))
 
         self._save()
 
@@ -191,7 +261,7 @@ class Agent:
     # ------------------------------------------------------------------
 
     def _call_llm(self, messages: list[dict], tools: list[dict]) -> dict:
-        """Call the LLM API."""
+        """Call the LLM API (non-streaming)."""
         payload = json.dumps({
             "model": self.model,
             "messages": messages,
@@ -216,6 +286,125 @@ class Agent:
                 f"Cannot connect to LLM at {self.base_url}. "
                 f"Is ds4-server running? ({e})"
             )
+
+    def _call_llm_stream(
+        self, messages: list[dict], tools: list[dict],
+        on_event: EventCallback, turn_number: int = 0,
+    ) -> tuple[str, list[dict]]:
+        """Call the LLM API with ``stream: true``, emitting text deltas.
+
+        Accumulates tool-call fragments across streaming chunks and returns
+        ``(accumulated_content, tool_calls)`` when the stream completes.
+        This is intentionally synchronous — the calling async loop handles
+        yield points between turns, not mid-stream.
+        """
+        parsed = urlparse(self.base_url)
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        timeout = 300
+
+        payload = json.dumps({
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "temperature": 0.0,
+            "max_tokens": 4096,
+            "stream": True,
+        }).encode("utf-8")
+
+        if parsed.scheme == "https":
+            conn: http.client.HTTPConnection = http.client.HTTPSConnection(
+                parsed.hostname, port, timeout=timeout)
+        else:
+            conn = http.client.HTTPConnection(
+                parsed.hostname, port, timeout=timeout)
+
+        try:
+            conn.request(
+                "POST", f"{parsed.path}/chat/completions",
+                body=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+            )
+            resp = conn.getresponse()
+            if resp.status != 200:
+                body = resp.read().decode("utf-8", errors="replace")
+                raise RuntimeError(f"LLM API error {resp.status}: {body[:500]}")
+
+            accumulated_content = ""
+            tool_calls_acc: dict[int, dict[str, Any]] = {}
+            raw_buffer = b""
+
+            while True:
+                chunk = resp.read(256)
+                if not chunk:
+                    break
+                raw_buffer += chunk
+
+                # Decode what we can — keep incomplete multi-byte sequences
+                try:
+                    text = raw_buffer.decode("utf-8")
+                except UnicodeDecodeError as e:
+                    # Split at the last complete character
+                    text = raw_buffer[:e.start].decode("utf-8")
+                    raw_buffer = raw_buffer[e.start:]
+                else:
+                    raw_buffer = b""
+
+                for line in text.split("\n"):
+                    line = line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choices = event.get("choices", [])
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {})
+
+                    # Content deltas
+                    txt = delta.get("content", "")
+                    if txt:
+                        accumulated_content += txt
+                        on_event(TextEvent(content=txt, is_streaming=True))
+
+                    # Tool-call fragment accumulation
+                    for tc in delta.get("tool_calls", []):
+                        idx = tc.get("index", 0)
+                        if idx not in tool_calls_acc:
+                            tool_calls_acc[idx] = {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            }
+                        entry = tool_calls_acc[idx]
+                        if tc.get("id"):
+                            entry["id"] = tc["id"]
+                        func = tc.get("function", {})
+                        if func.get("name"):
+                            entry["function"]["name"] += func["name"]
+                        if "arguments" in func:
+                            entry["function"]["arguments"] += func.get(
+                                "arguments", "")
+
+            # Fill any missing tool-call IDs with synthetic values
+            tool_calls = []
+            for idx, tc in tool_calls_acc.items():
+                if not tc["id"]:
+                    tc["id"] = f"call_{turn_number}_{idx}"
+                tool_calls.append(tc)
+        finally:
+            conn.close()
+
+        tool_calls = list(tool_calls_acc.values()) if tool_calls_acc else []
+        return accumulated_content, tool_calls
 
     # ------------------------------------------------------------------
     # REPL helpers
@@ -315,3 +504,22 @@ Ctrl+D quits (saves state).""")
         state["agent_messages"] = self.messages
         state["last_action"] = datetime.now(timezone.utc).isoformat()
         save_state(self.case_dir, state)
+
+
+# ------------------------------------------------------------------
+# CLI event callback — restores the original print behaviour
+# ------------------------------------------------------------------
+
+def _cli_print_event(event: AgentEvent) -> None:
+    """Print agent events to stdout for the CLI REPL."""
+    if isinstance(event, TextEvent):
+        print(f"\n{event.content}")
+    elif isinstance(event, ToolCallEvent):
+        print(f"\n  🔧 {event.name}({json.dumps(event.args, default=str)[:120]})")
+    elif isinstance(event, ToolResultEvent):
+        if event.is_error:
+            print(f"    ⚠️  {event.content}")
+        else:
+            preview = event.content[:150].replace("\n", " ")
+            print(f"    ✓ {preview}...")
+    # TurnCompleteEvent is silent in CLI
