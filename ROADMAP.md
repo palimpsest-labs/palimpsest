@@ -86,7 +86,7 @@ Journalists work in teams. The tool should too.
 
 Scale, speed, and polish.
 
-- [x] SQLite-backed memory tier — knowledge graph persisted in SQLite via `memory-mcp` (local `memory.jsonl` fallback retained). Enables temporal queries against `created_at`/`updated_at`: `memory-mcp recent(hours)` (entities/relations changed in a window) and `memory-stats-mcp graph_stats` (oldest/newest entities, 24h activity)
+- [x] SQLite-backed memory tier — knowledge graph persisted in SQLite via `memory-mcp` (local `memory.jsonl` fallback retained). Full graph operations against SQLite: `create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_observations`, `delete_relations`, `search_nodes`, `open_nodes`, `read_graph`, `traverse`, `search_similar`. Plus temporal queries on `created_at`/`updated_at`: `recent(hours)` and `memory-stats-mcp graph_stats` (oldest/newest entities, 24h activity)
 - [ ] Automatic Wayback cross-reference on every capture
 - [ ] Confidence-weighted synthesis (Bayesian scoring for findings with mixed evidence)
 - [ ] Multi-journalist real-time collaboration
