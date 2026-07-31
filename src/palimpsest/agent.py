@@ -17,8 +17,9 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 from urllib.parse import urlparse
 
-from .case import get_case_dir
+from .case import get_case_dir, get_memory_path
 from .gates import build_system_prompt
+from .mcp_client import MCPClient, get_memory_client
 from .state import load_state, save_state
 from .tools import (
     get_all_tool_definitions,
@@ -94,6 +95,35 @@ class Agent:
         if saved:
             self.messages.extend(saved)
 
+        # MCP memory client — started lazily on first memory tool call
+        self._memory_client: MCPClient | None = None
+        self._mcp_error: str | None = None
+
+    async def _ensure_mcp(self) -> MCPClient | None:
+        """Lazily start the memory MCP client. Returns None if unavailable."""
+        if self._memory_client is not None:
+            return self._memory_client
+        if self._mcp_error is not None:
+            return None
+        try:
+            memory_path = str(get_memory_path(self.slug))
+            self._memory_client = get_memory_client(memory_path)
+            await self._memory_client.start()
+        except (FileNotFoundError, RuntimeError, EOFError, OSError) as e:
+            self._mcp_error = str(e)
+            self._memory_client = None
+            return None
+        return self._memory_client
+
+    async def close(self) -> None:
+        """Shut down the MCP memory client."""
+        if self._memory_client is not None:
+            try:
+                await self._memory_client.close()
+            except Exception:
+                pass
+            self._memory_client = None
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -104,6 +134,7 @@ class Agent:
         if user_message:
             await self._run_turn(user_message, on_event=_cli_print_event)
         self._save()
+        await self.close()
 
     async def repl(self) -> None:
         """Interactive REPL: conversation loop with /commands."""
@@ -119,6 +150,7 @@ class Agent:
             except (EOFError, KeyboardInterrupt):
                 print("\nSaving...")
                 self._save()
+                await self.close()
                 break
 
             if not user_input:
@@ -245,11 +277,26 @@ class Agent:
     async def _dispatch_tool(self, name: str, args: dict) -> ToolResult:
         """Dispatch a tool call to the appropriate handler."""
         if name in {t["name"] for t in MEMORY_TOOLS}:
-            return ToolResult(
-                f"Memory tool '{name}' called with {json.dumps(args, default=str)}.\n"
-                f"[MCP integration pending — graph ops applied via memory.jsonl directly.]",
-                metadata={"tool": name, "args": args},
-            )
+            mcp_name = name.removeprefix("memory_")
+            client = await self._ensure_mcp()
+            if client is None:
+                error_msg = self._mcp_error or "MCP memory server not available"
+                return ToolResult(
+                    f"Memory tool '{name}' unavailable: {error_msg}\n"
+                    f"[Please install mcp-server-memory: npm install -g"
+                    f" @modelcontextprotocol/server-memory]",
+                    is_error=True,
+                    metadata={"tool": name, "mcp_error": error_msg},
+                )
+            try:
+                result_text = await client.call_tool(mcp_name, args)
+                return ToolResult(result_text, metadata={"tool": name, "args": args})
+            except (RuntimeError, EOFError, OSError) as e:
+                return ToolResult(
+                    f"Memory tool '{name}' failed: {e}",
+                    is_error=True,
+                    metadata={"tool": name, "error": str(e)},
+                )
 
         if name in {t["name"] for t in RESEARCH_TOOLS}:
             return run_research_tool(name, args, self.case_dir)

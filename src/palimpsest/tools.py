@@ -122,6 +122,133 @@ MEMORY_TOOLS = [
             "required": ["relations"],
         },
     },
+    {
+        "name": "memory_delete_entities",
+        "description": "Delete entities from the knowledge graph by name.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "entityNames": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Names of entities to delete",
+                },
+            },
+            "required": ["entityNames"],
+        },
+    },
+    {
+        "name": "memory_delete_observations",
+        "description": "Delete specific observations from entities.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "deletions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "entityName": {"type": "string"},
+                            "observations": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": ["entityName", "observations"],
+                    },
+                },
+            },
+            "required": ["deletions"],
+        },
+    },
+    {
+        "name": "memory_delete_relations",
+        "description": "Delete relations between entities.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "relations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "from": {"type": "string"},
+                            "to": {"type": "string"},
+                            "relationType": {"type": "string"},
+                        },
+                        "required": ["from", "to", "relationType"],
+                    },
+                },
+            },
+            "required": ["relations"],
+        },
+    },
+    {
+        "name": "memory_open_nodes",
+        "description": "Open specific nodes in the knowledge graph by name. Returns full entity details including all observations and timestamps.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Names of entities to open",
+                },
+            },
+            "required": ["names"],
+        },
+    },
+    {
+        "name": "memory_read_graph",
+        "description": "Read the entire knowledge graph. Returns all entities with observations and all relations.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "memory_traverse",
+        "description": "Traverse the graph from a starting node, returning all entities within a given number of hops.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "start_node": {"type": "string", "description": "Entity name to start from"},
+                "depth": {
+                    "type": "integer",
+                    "description": "Number of hops to traverse (default 1, max 3)",
+                },
+            },
+            "required": ["start_node"],
+        },
+    },
+    {
+        "name": "memory_recent",
+        "description": "Return entities and relations created or updated in the last N hours. Useful for seeing what changed recently.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "hours": {
+                    "type": "integer",
+                    "description": "Look-back window in hours (default 24, max 720)",
+                },
+            },
+        },
+    },
+    {
+        "name": "memory_search_similar",
+        "description": "Fuzzy search for entity names using trigram similarity. Find entities with similar names even when you're unsure of the exact spelling.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name to search for (fuzzy matched)"},
+                "threshold": {
+                    "type": "number",
+                    "description": "Minimum similarity score 0.0–1.0 (default 0.3)",
+                },
+            },
+            "required": ["name"],
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
