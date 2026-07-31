@@ -14,32 +14,39 @@ A standalone agent that works with `ds4` (DwarfStar — [antirez/ds4](https://gi
 
 ## The Toolkit
 
-Seven repos, one integrated pipeline:
+Twelve repos, one integrated pipeline:
 
 | Repo | Role |
 |---|---|
 | **[palimpsest](https://github.com/palimpsest-labs/palimpsest)** | Research engine — local-first, source-tracked, methodology-enforced |
 | **[unified-history-mcp](https://github.com/palimpsest-labs/unified-history-mcp)** | Cross-domain search across sessions, transcripts, notifications, and web archives |
 | **[fst-indexer](https://github.com/palimpsest-labs/fst-indexer)** | Blazing-fast FST full-text search indexer (Rust) |
+| **[memory-mcp](https://github.com/palimpsest-labs/memory-mcp)** | Persistent SQLite-backed knowledge graph |
+| **[memory-stats-mcp](https://github.com/palimpsest-labs/memory-stats-mcp)** | Read-only graph stats and discovery |
 | **[graph-gardener](https://github.com/palimpsest-labs/graph-gardener)** | LLM-powered knowledge graph maintenance |
-| **[web-archive-mcp](https://github.com/palimpsest-labs/web-archive-mcp)** | Persistent web fetch/search archiving — every result indexed forever |
-| **[shell-sandbox-mcp](https://github.com/palimpsest-labs/shell-sandbox-mcp)** | Safe shell commands via pledge()+unveil() with vendored busybox |
 | **[vibe-summarizer](https://github.com/palimpsest-labs/vibe-summarizer)** | LLM-powered session and transcript summarizer |
+| **[web-archive-mcp](https://github.com/palimpsest-labs/web-archive-mcp)** | Persistent web fetch/search archiving — every result indexed forever |
+| **[dns-whois-mcp](https://github.com/palimpsest-labs/dns-whois-mcp)** | DNS lookup and WHOIS registration research |
+| **[image-analysis-mcp](https://github.com/palimpsest-labs/image-analysis-mcp)** | OCR, EXIF, and image metadata extraction |
+| **[pdf-extract-mcp](https://github.com/palimpsest-labs/pdf-extract-mcp)** | PDF text and metadata extraction |
+| **[shell-sandbox-mcp](https://github.com/palimpsest-labs/shell-sandbox-mcp)** | Safe shell commands via pledge()+unveil() with vendored busybox |
 
 ### How they connect
 
 ```
-shell-sandbox-mcp ──► pledge()+unveil() ──► busybox applets
-web-archive-mcp   ──► web_fetch/search   ──► JSONL archive
-                          │                      │
-                          ▼                      ▼
-                    fst-indexer ◄──────── unified-history-mcp
-                          │                      │
-                          ▼                      ▼
-                    graph-gardener          search across all
-                          │                 domains at once
-                          ▼
-                    memory graph
+        capture / OSINT                     execution
+ web-archive-mcp ──► JSONL archive          shell-sandbox-mcp
+ dns-whois-mcp   ──► JSONL archive          pledge()+unveil()
+ image-analysis  ──► OCR / EXIF             vendored busybox
+ pdf-extract-mcp ──► extracted text
+        │
+        ▼
+   fst-indexer ◄───────────────── unified-history-mcp
+        │                             │
+        ▼                             ▼
+   memory-mcp ◄── graph-gardener  search across all
+   memory-stats    (maintenance)  domains at once
+   vibe-summarizer (summaries)
 ```
 
 ## Quick Start
