@@ -9,6 +9,9 @@ description = "Open-source research engine for investigative journalists — per
 license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+]
 authors = [
     {name = "Palimpsest Contributors"},
 ]
