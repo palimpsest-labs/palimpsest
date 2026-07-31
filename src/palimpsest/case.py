@@ -15,6 +15,7 @@ Structure::
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -153,8 +154,17 @@ def get_case_dir(slug: str, base_dir: str | None = None) -> Path:
 
     Raises FileNotFoundError if the directory does not exist.
     """
+    if not _VALID_SLUG_RE.match(slug):
+        raise ValueError(
+            f"Invalid slug {slug!r}: must be kebab-case "
+            "(lowercase alphanumeric characters separated by single hyphens)"
+        )
     base = _resolve_base(base_dir)
-    case_dir = base / slug
+    case_dir = (base / slug).resolve()
+    # Defence in depth: ensure the resolved path is inside the base
+    resolved_base = base.resolve()
+    if not str(case_dir).startswith(str(resolved_base) + os.sep) or case_dir == resolved_base:
+        raise ValueError(f"Path traversal detected for slug {slug!r}")
     if not case_dir.is_dir():
         raise FileNotFoundError(f"Case {slug!r} not found at {case_dir}")
     return case_dir
@@ -164,10 +174,13 @@ def get_memory_path(slug: str, base_dir: str | None = None) -> Path:
     """Return the path to *memory.jsonl* for the given case.
 
     Creates the file (and the case directory, if it does not already exist)
-    when missing.
+    when missing.  Uses an atomic write to avoid TOCTOU races.
     """
     case_dir = get_case_dir(slug, base_dir)
     memory_path = case_dir / "memory.jsonl"
     if not memory_path.exists():
-        memory_path.write_text("", encoding="utf-8")
+        # Atomic: write to temp file in same directory, then rename
+        tmp_path = memory_path.with_suffix(".jsonl.tmp")
+        tmp_path.write_text("", encoding="utf-8")
+        os.replace(tmp_path, memory_path)
     return memory_path

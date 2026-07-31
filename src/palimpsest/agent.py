@@ -6,6 +6,7 @@ and orchestrates the investigation through tool calling and methodology gates.
 
 from __future__ import annotations
 
+import asyncio
 import http.client
 import json
 import os
@@ -28,6 +29,10 @@ from .tools import (
     MEMORY_TOOLS,
     RESEARCH_TOOLS,
 )
+
+# Pre-built frozenset for O(1) membership tests
+_MEMORY_TOOL_NAMES = frozenset(t["name"] for t in MEMORY_TOOLS)
+_RESEARCH_TOOL_NAMES = frozenset(t["name"] for t in RESEARCH_TOOLS)
 
 
 # ------------------------------------------------------------------
@@ -97,21 +102,23 @@ class Agent:
 
         # MCP memory client — started lazily on first memory tool call
         self._memory_client: MCPClient | None = None
-        self._mcp_error: str | None = None
 
     async def _ensure_mcp(self) -> MCPClient | None:
         """Lazily start the memory MCP client. Returns None if unavailable."""
         if self._memory_client is not None:
             return self._memory_client
-        if self._mcp_error is not None:
-            return None
         try:
             memory_path = str(get_memory_path(self.slug))
             self._memory_client = get_memory_client(memory_path)
             await self._memory_client.start()
         except (FileNotFoundError, RuntimeError, EOFError, OSError) as e:
-            self._mcp_error = str(e)
-            self._memory_client = None
+            if self._memory_client is not None:
+                try:
+                    await self._memory_client.close()
+                except Exception:
+                    pass
+                self._memory_client = None
+            print(f"  ⚠️  MCP memory unavailable: {e}", file=sys.stderr)
             return None
         return self._memory_client
 
@@ -121,7 +128,8 @@ class Agent:
             try:
                 await self._memory_client.close()
             except Exception:
-                pass
+                import traceback
+                traceback.print_exc(file=sys.stderr)
             self._memory_client = None
 
     # ------------------------------------------------------------------
@@ -130,11 +138,13 @@ class Agent:
 
     async def run(self, user_message: str | None = None) -> None:
         """One-shot: run one user message through the agent and exit."""
-        self._print_status()
-        if user_message:
-            await self._run_turn(user_message, on_event=_cli_print_event)
-        self._save()
-        await self.close()
+        try:
+            self._print_status()
+            if user_message:
+                await self._run_turn(user_message, on_event=_cli_print_event)
+            self._save()
+        finally:
+            await self.close()
 
     async def repl(self) -> None:
         """Interactive REPL: conversation loop with /commands."""
@@ -144,31 +154,36 @@ class Agent:
         else:
             print("\nResuming investigation. Type /help for commands.")
 
-        while True:
-            try:
-                user_input = input("\n▸ ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print("\nSaving...")
-                self._save()
-                await self.close()
-                break
+        try:
+            while True:
+                try:
+                    user_input = input("\n▸ ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print("\nSaving...")
+                    self._save()
+                    break
 
-            if not user_input:
-                continue
+                if not user_input:
+                    continue
 
-            # Handle /commands
-            if user_input.startswith("/"):
-                self._handle_command(user_input)
-                continue
+                # Handle /commands
+                if user_input.startswith("/"):
+                    if self._handle_command(user_input):
+                        break
+                    continue
 
-            # Run the turn
-            try:
-                await self._run_turn(user_input, on_event=_cli_print_event)
-            except RuntimeError as e:
-                print(f"\n⚠️  Error: {e}")
-            except KeyboardInterrupt:
-                print("\n⏸️  Interrupted. Saving state...")
-                self._save()
+                # Run the turn
+                try:
+                    await self._run_turn(user_input, on_event=_cli_print_event)
+                except RuntimeError as e:
+                    print(f"\n⚠️  Error: {e}")
+                except KeyboardInterrupt:
+                    print("\n⏸️  Interrupted. Saving state...")
+                    self._save()
+                    # Reset MCP client — it may be in an indeterminate state
+                    await self.close()
+        finally:
+            await self.close()
 
     async def run_turn(self, user_message: str,
                        on_event: EventCallback | None = None) -> str:
@@ -276,29 +291,40 @@ class Agent:
 
     async def _dispatch_tool(self, name: str, args: dict) -> ToolResult:
         """Dispatch a tool call to the appropriate handler."""
-        if name in {t["name"] for t in MEMORY_TOOLS}:
+        if name in _MEMORY_TOOL_NAMES:
             mcp_name = name.removeprefix("memory_")
             client = await self._ensure_mcp()
             if client is None:
-                error_msg = self._mcp_error or "MCP memory server not available"
                 return ToolResult(
-                    f"Memory tool '{name}' unavailable: {error_msg}\n"
-                    f"[Please install mcp-server-memory: npm install -g"
-                    f" @modelcontextprotocol/server-memory]",
+                    f"Memory tool '{name}' unavailable: memory-mcp server is not installed or "
+                    f"not on PATH.\nInstall memory-mcp from the palimpsest-labs toolkit.",
                     is_error=True,
-                    metadata={"tool": name, "mcp_error": error_msg},
+                    metadata={"tool": name},
+                )
+            if not client.knows(mcp_name):
+                return ToolResult(
+                    f"Memory tool '{name}' not supported by the connected memory server "
+                    f"(server reports these tools: {sorted(client._tool_names)})",
+                    is_error=True,
+                    metadata={"tool": name},
                 )
             try:
-                result_text = await client.call_tool(mcp_name, args)
-                return ToolResult(result_text, metadata={"tool": name, "args": args})
-            except (RuntimeError, EOFError, OSError) as e:
+                result_text, is_error = await client.call_tool(mcp_name, args)
+                return ToolResult(
+                    result_text,
+                    is_error=is_error,
+                    metadata={"tool": name, "args": args},
+                )
+            except (RuntimeError, EOFError, OSError, asyncio.TimeoutError) as e:
+                # Tear down the possibly-corrupt client so next call re-initialises
+                await self.close()
                 return ToolResult(
                     f"Memory tool '{name}' failed: {e}",
                     is_error=True,
                     metadata={"tool": name, "error": str(e)},
                 )
 
-        if name in {t["name"] for t in RESEARCH_TOOLS}:
+        if name in _RESEARCH_TOOL_NAMES:
             return run_research_tool(name, args, self.case_dir)
 
         return ToolResult(f"Unknown tool: {name}", is_error=True)
@@ -474,7 +500,8 @@ class Agent:
         state = load_state(self.case_dir)
         return bool(state.get("agent_messages"))
 
-    def _handle_command(self, cmd: str) -> None:
+    def _handle_command(self, cmd: str) -> bool:
+        """Handle a REPL /command. Returns True if the REPL should exit."""
         parts = cmd.split(maxsplit=1)
         name = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
@@ -482,7 +509,7 @@ class Agent:
         if name in ("/quit", "/q"):
             self._save()
             print("Saved. Goodbye.")
-            sys.exit(0)
+            return True
 
         elif name == "/save":
             self._save()
@@ -544,6 +571,8 @@ Ctrl+D quits (saves state).""")
 
         else:
             print(f"Unknown command: {name}. Type /help for commands.")
+
+        return False
 
     def _save(self) -> None:
         """Persist messages and timestamp to state.json."""

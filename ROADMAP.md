@@ -40,7 +40,7 @@ The agent works. Now make it usable by actual journalists.
 Wire up the backends properly.
 
 - [ ] **ds4-server tested end-to-end** — full agent loop with DeepSeek V4 Flash on Apple Silicon
-- [x] **MCP memory integration** — agent reads/writes the knowledge graph via `memory-mcp` (SQLite-backed, 12 tool definitions: `memory_search_nodes`, `memory_create_entities`, `memory_add_observations`, `memory_create_relations`, `memory_delete_*`, `memory_open_nodes`, `memory_read_graph`, `memory_traverse`, `memory_recent`, `memory_search_similar`). Lazy-init with graceful fallback when `mcp-server-memory` is unavailable.
+- [x] **MCP memory integration** — agent reads/writes the knowledge graph via `memory-mcp` (SQLite-backed, 12 tool definitions: `memory_search_nodes`, `memory_create_entities`, `memory_add_observations`, `memory_create_relations`, `memory_delete_*`, `memory_open_nodes`, `memory_read_graph`, `memory_traverse`, `memory_recent`, `memory_search_similar`). Lazy-init with graceful fallback; tool-name validation against server capability; per-turn teardown in web UI; `try/finally` cleanup on all exit paths.
 - [ ] **MCP unified-history integration** — agent searches session history, transcripts, notifications (backed by vibe-fst-indexer)
 - [ ] **Hash-chained evidence manifest** — each manifest entry includes SHA-256 of previous entry for tamper detection
 - [ ] **Graph-gardener integration** — periodic deduplication and cleanup of the investigation graph

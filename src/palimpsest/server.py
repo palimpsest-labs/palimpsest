@@ -457,18 +457,25 @@ class _ClientDisconnected(Exception):
 # Patch Agent to add a synchronous turn runner for the web server
 def _run_turn_sync_patch(self: Agent, user_message: str,
                          on_event: Any = None) -> str:
-    """Synchronous wrapper around the async turn. Used by the web server."""
+    """Synchronous wrapper around the async turn. Used by the web server.
+
+    Closes the MCP client after each turn so the next request — which
+    runs in a fresh ``asyncio.run()`` event loop — starts clean.
+    """
     import asyncio
 
     final_text: str = ""
 
     async def _do() -> None:
         nonlocal final_text
-        await self._run_turn(user_message, on_event=on_event)
-        for msg in reversed(self.messages):
-            if msg.get("role") == "assistant" and msg.get("content"):
-                final_text = msg["content"]
-                return
+        try:
+            await self._run_turn(user_message, on_event=on_event)
+            for msg in reversed(self.messages):
+                if msg.get("role") == "assistant" and msg.get("content"):
+                    final_text = msg["content"]
+                    return
+        finally:
+            await self.close()
 
     try:
         asyncio.run(_do())
@@ -519,5 +526,11 @@ def serve(port: int = DEFAULT_PORT, host: str = DEFAULT_HOST,
         pass
 
     print("\nShutting down...")
+    # Close all cached agent MCP clients
+    for agent in _agents.values():
+        try:
+            asyncio.run(agent.close())
+        except Exception:
+            pass
     server.shutdown()
     server_thread.join(timeout=2)
