@@ -479,11 +479,15 @@ def _run_turn_sync_patch(self: Agent, user_message: str,
 
     try:
         asyncio.run(_do())
-    except RuntimeError:
+    except RuntimeError as e:
         # Event loop already running — use existing loop (shouldn't happen
         # with ThreadingHTTPServer, but handle gracefully)
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(_do())
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_do())
+        except RuntimeError:
+            # No loop at all — re-raise the original error
+            raise e
 
     return final_text
 
